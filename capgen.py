@@ -26,6 +26,8 @@ import warnings
 
 # see note XXX from (Xu et al. 2015)
 from homogeneous_data import HomogeneousData
+#optimizers
+from optimzers import adadelta, rmsprop, sgd # TODO add adam
 
 # dataset iterators
 import flickr8k
