@@ -34,6 +34,6 @@ and notify the authors.
 To use the evaluation script: see [coco-caption](https://github.com/tylin/coco-caption)
 
 ###Installation + Experiment Instructions
-1) Install the above dependencies
-2) Install Theano using your [favourite method](http://www.deeplearning.net/software/theano/) 
-3) TODO, rest of the instructions 
+1) Install the above dependencies  
+2) Install Theano using your [favourite method](http://www.deeplearning.net/software/theano/)   
+3) TODO, rest of the instructions  
