@@ -1,6 +1,7 @@
 # arctic-captions
 
 Source code for [Show, Attend and Tell: Neural Image Caption Generation with Visual Attention](http://arxiv.org/abs/1502.03044)
+runnable on cpu and gpu.
 
 ## License
 
@@ -22,9 +23,9 @@ To appear in ICML (2015)
 This code is written in python, to use it you will need:
 
 * Python 2.7
-* A relative recent version of [NumPy](http://www.numpy.org/), [SciPy](http://www.scipy.org/)
+* A relative recent version of [NumPy](http://www.numpy.org/)
 * [scikit learn](http://scikit-learn.org/stable/index.html)
-* argparse 
+* [argparse](https://www.google.ca/search?q=argparse&oq=argparse&aqs=chrome..69i57.1260j0j1&sourceid=chrome&es_sm=122&ie=UTF-8#q=argparse+pip)
 
 In addition, this code is built using
 [Theano](http://www.deeplearning.net/software/theano/). If you encounter
@@ -34,6 +35,6 @@ and notify the authors.
 To use the evaluation script: see [coco-caption](https://github.com/tylin/coco-caption)
 
 ###Installation + Experiment Instructions
-1) Install the above dependencies  
+1) Install the above dependencies and `$ git clone` the repo  
 2) Install Theano using your [favourite method](http://www.deeplearning.net/software/theano/)   
-3) TODO, rest of the instructions  
+3) TODO, rest of this
