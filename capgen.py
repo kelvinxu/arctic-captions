@@ -4,9 +4,15 @@ Source code for an attention based image caption generation system described in:
 Show, Attend and Tell: Neural Image Caption Generation with Visual Attention
 International Conference for Machine Learning (2015)
 
+preprint: http://arxiv.org/abs/1502.03044
+
 Kelvin Xu, Jimmy Ba, Ryan Kiros, Kyunghyun Cho,
 Aaron Courville, Ruslan Salakhutdinov, Richard Zemel, and Yoshua Bengio
 University of Toronto/University of Montreal
+
+Comments in square brackets [] indicate references to the equations/
+more detailed explanations in the paper. 
+(please contact the authors if there are typos!)
 '''
 import theano
 import theano.tensor as tensor
@@ -24,7 +30,7 @@ from sklearn.cross_validation import KFold
 
 import warnings
 
-# see note XXX from (Xu et al. 2015)
+# [see Section (4.3) for explanation]
 from homogeneous_data import HomogeneousData
 #optimizers
 from optimzers import adadelta, rmsprop, sgd # TODO add adam
@@ -44,7 +50,7 @@ def get_dataset(name):
     return datasets[name][0], datasets[name][1]
 
 '''
-Theano requires shared variables, so to
+Theano uses shared variables for parameters, so to
 make this code more portable, these two functions
 push and pull variables between a shared
 variable dictionary and a regular numpy 
@@ -80,45 +86,6 @@ def dropout_layer(state_before, use_noise, trng):
 def _p(pp, name):
     return '%s_%s'%(pp, name)
 
-# all parameters
-def init_params(options):
-    params = OrderedDict()
-    # embedding
-    params['Wemb'] = norm_weight(options['n_words'], options['dim_word'])
-    ctx_dim = options['ctx_dim']
-    if options['lstm_encoder']:
-        # encoder: LSTM
-        params = get_layer('lstm')[0](options, params, prefix='encoder', 
-                                      nin=options['ctx_dim'], dim=options['dim'])
-        params = get_layer('lstm')[0](options, params, prefix='encoder_rev', 
-                                      nin=options['ctx_dim'], dim=options['dim'])
-        ctx_dim = options['dim'] * 2
-    # init_state, init_cell
-    for lidx in xrange(1, options['n_layers_init']):
-        params = get_layer('ff')[0](options, params, prefix='ff_init_%d'%lidx, nin=ctx_dim, nout=ctx_dim)
-    params = get_layer('ff')[0](options, params, prefix='ff_state', nin=ctx_dim, nout=options['dim'])
-    params = get_layer('ff')[0](options, params, prefix='ff_memory', nin=ctx_dim, nout=options['dim'])
-    # decoder: LSTM
-    params = get_layer('lstm_cond')[0](options, params, prefix='decoder', 
-                                       nin=options['dim_word'], dim=options['dim'], 
-                                       dimctx=ctx_dim)
-    if options['n_layers_lstm'] > 1:
-        for lidx in xrange(1, options['n_layers_lstm']):
-            params = get_layer('ff')[0](options, params, prefix='ff_state_%d'%lidx, nin=options['ctx_dim'], nout=options['dim'])
-            params = get_layer('ff')[0](options, params, prefix='ff_memory_%d'%lidx, nin=options['ctx_dim'], nout=options['dim'])
-            params = get_layer('lstm_cond')[0](options, params, prefix='decoder_%d'%lidx, 
-                                               nin=options['dim'], dim=options['dim'],
-                                               dimctx=ctx_dim)
-    # readout
-    params = get_layer('ff')[0](options, params, prefix='ff_logit_lstm', nin=options['dim'], nout=options['dim_word'])
-    if options['ctx2out']:
-        params = get_layer('ff')[0](options, params, prefix='ff_logit_ctx', nin=ctx_dim, nout=options['dim_word'])
-    if options['n_layers_out'] > 1:
-        for lidx in xrange(1, options['n_layers_out']):
-            params = get_layer('ff')[0](options, params, prefix='ff_logit_h%d'%lidx, nin=options['dim_word'], nout=options['dim_word'])
-    params = get_layer('ff')[0](options, params, prefix='ff_logit', nin=options['dim_word'], nout=options['n_words'])
-
-    return params
 
 # initialize Theano shared variables according to the initial parameters
 def init_tparams(params):
@@ -137,22 +104,12 @@ def load_params(path, params):
 
     return params
 
-# layers: 'name': ('parameter initializer', 'feedforward')
-layers = {'ff': ('param_init_fflayer', 'fflayer'), 
-          'lstm': ('param_init_lstm', 'lstm_layer'),
-          'lstm_cond': ('param_init_lstm_cond', 'lstm_cond_layer'),
-          }
-
-def get_layer(name):
-    fns = layers[name]
-    return (eval(fns[0]), eval(fns[1]))
-
 # some utilities
 def ortho_weight(ndim):
     """
     Random orthogonal weights
 
-    Used by norm_weights, in which case, we
+    Used by norm_weights(below), in which case, we
     are ensuring that the rows are orthogonal
     (i.e W = U \Sigma V, U has the same
     # of rows, V has the same # of cols)
@@ -173,6 +130,7 @@ def norm_weight(nin,nout=None, scale=0.01, ortho=True):
         W = scale * numpy.random.randn(nin, nout)
     return W.astype('float32')
 
+# some useful shorthands
 def tanh(x):
     return tensor.tanh(x)
 
@@ -181,6 +139,30 @@ def rectifier(x):
 
 def linear(x):
     return x
+
+"""
+Neural network layer definitions.
+
+The life-cycle of each of these layers is as follows
+    1) The param_init of the layer is called, which creates
+    the weights of the network. 
+    2) The fprop is called which builds that part of the Theano graph
+    using the weights created in step 1). This automatically links
+    these variables to the graph.
+
+Each prefix is used like a key and should be unique
+to avoid naming conflicts when building the graph.
+"""
+# layers: 'name': ('parameter initializer', 'fprop')
+layers = {'ff': ('param_init_fflayer', 'fflayer'), 
+          'lstm': ('param_init_lstm', 'lstm_layer'),
+          'lstm_cond': ('param_init_lstm_cond', 'lstm_cond_layer'),
+          }
+
+def get_layer(name):
+    fns = layers[name]
+    return (eval(fns[0]), eval(fns[1]))
+
 
 # feedforward layer: affine transformation + point-wise nonlinearity
 def param_init_fflayer(options, params, prefix='ff', nin=None, nout=None):
@@ -202,12 +184,17 @@ def param_init_lstm(options, params, prefix='lstm', nin=None, dim=None):
         nin = options['dim_proj']
     if dim == None:
         dim = options['dim_proj']
-    # Stack the weight matricies for faster dot prods
+    """
+     Stack the weight matricies for all the gates 
+     for much cleaner code and slightly faster dot-prods
+    """
+    # input weights
     W = numpy.concatenate([norm_weight(nin,dim),
                            norm_weight(nin,dim),
                            norm_weight(nin,dim),
                            norm_weight(nin,dim)], axis=1)
     params[_p(prefix,'W')] = W
+    # for the previous hidden activation
     U = numpy.concatenate([ortho_weight(dim),
                            ortho_weight(dim),
                            ortho_weight(dim),
@@ -222,18 +209,22 @@ def lstm_layer(tparams, state_below, options, prefix='lstm', mask=None, **kwargs
     nsteps = state_below.shape[0]
     dim = tparams[_p(prefix,'U')].shape[0]
 
+    # if we are dealing with a mini-batch
     if state_below.ndim == 3:
         n_samples = state_below.shape[1]
         init_state = tensor.alloc(0., n_samples, dim)
         init_memory = tensor.alloc(0., n_samples, dim)
+    # during sampling
     else:
         n_samples = 1
         init_state = tensor.alloc(0., dim)
         init_memory = tensor.alloc(0., dim)
 
+    # if we have no mask, we assume all the inputs are valid
     if mask == None:
         mask = tensor.alloc(1., state_below.shape[0], 1)
 
+    # use the slice to calculate all the different gates
     def _slice(_x, n, dim):
         if _x.ndim == 3:
             return _x[:, :, n*dim:(n+1)*dim]
@@ -241,6 +232,7 @@ def lstm_layer(tparams, state_below, options, prefix='lstm', mask=None, **kwargs
             return _x[:, n*dim:(n+1)*dim]
         return _x[n*dim:(n+1)*dim]
 
+    # one time step of the lstm
     def _step(m_, x_, h_, c_):
         preact = tensor.dot(h_, tparams[_p(prefix, 'U')])
         preact += x_
@@ -273,7 +265,8 @@ def param_init_lstm_cond(options, params, prefix='lstm_cond', nin=None, dim=None
         dim = options['dim']
     if dimctx == None:
         dimctx = options['dim']
-    # input to LSTM
+    # input to LSTM, similar to the above, we stack the matricies for compactness, do one
+    # dot product, and use the slice function below to get the activations for each "gate"
     W = numpy.concatenate([norm_weight(nin,dim),
                            norm_weight(nin,dim),
                            norm_weight(nin,dim),
@@ -306,7 +299,7 @@ def param_init_lstm_cond(options, params, prefix='lstm_cond', nin=None, dim=None
     b_att = numpy.zeros((dimctx,)).astype('float32')
     params[_p(prefix,'b_att')] = b_att
 
-    # deeper attention
+    # optional "deep" attention
     if options['n_layers_att'] > 1:
         for lidx in xrange(1, options['n_layers_att']):
             params[_p(prefix,'W_att_%d'%lidx)] = ortho_weight(dimctx)
@@ -349,6 +342,7 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
     if mask == None:
         mask = tensor.alloc(1., state_below.shape[0], 1)
 
+    # infer lstm dimension
     dim = tparams[_p(prefix, 'U')].shape[0]
 
     # initial/previous state
@@ -368,13 +362,15 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
                 pctx_ = tanh(pctx_)
 
     # projected x
-    # state_below is timesteps*num samples by d in training
+    # state_below is timesteps*num samples by d in training (TODO change to notation of paper)
     # this is n * d during sampling 
     state_below = tensor.dot(state_below, tparams[_p(prefix, 'W')]) + tparams[_p(prefix, 'b')]
 
-    # hard attention variables
+    # additional parameters for stochastic hard attention 
     if options['attn_type'] == 'stochastic':
+        # temperature for softmax
         temperature = options.get("temperature", 1)
+        # [see (Section 4.1): Stochastic "Hard" Attention]
         semi_sampling_p = options.get("semi_sampling_p", 0.5) 
         temperature_c = theano.shared(numpy.float32(temperature), name='temperature_c')
         h_sampling_mask = trng.binomial((1,), p=semi_sampling_p, n=1, dtype=theano.config.floatX).sum()
@@ -385,7 +381,8 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
         return _x[:, n*dim:(n+1)*dim]
 
     def _step(m_, x_, h_, c_, a_, as_, ct_, pctx_, dp_=None, dp_att_=None):
-        # attention
+        # attention [see equations (4), (5), (6) in section "3.1.2 Decoder: Long Short
+        # Term Memory Network]
         pstate_ = tensor.dot(h_, tparams[_p(prefix,'Wd_att')])
         pctx_ = pctx_ + pstate_[:,None,:] 
         pctx_list = []
@@ -422,6 +419,7 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
         preact += x_
         preact += tensor.dot(ctx_, tparams[_p(prefix, 'Wc')])
 
+        # [equation (1)]
         i = _slice(preact, 0, dim)
         f = _slice(preact, 1, dim)
         o = _slice(preact, 2, dim)
@@ -435,7 +433,7 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
         c = tensor.tanh(_slice(preact, 3, dim))
 
         c = f * c_ + i * c
-        c = m_[:,None] * c + (1. - m_)[:,None] * c_
+        c = m_[:,None] * c + (1. - m_)[:,None] * c_ # if the mask is 0, just copy the previous state
 
         h = o * tensor.tanh(c)
         h = m_[:,None] * h + (1. - m_)[:,None] * h_
@@ -508,13 +506,88 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
                                     n_steps=nsteps, profile=False)
         return rval, updates
 
+# all parameters
+def init_params(options):
+    params = OrderedDict()
+    # embedding: [matrix E in paper]
+    params['Wemb'] = norm_weight(options['n_words'], options['dim_word'])
+    ctx_dim = options['ctx_dim']
+    if options['lstm_encoder']: # potential feature that runs an LSTM over the annotation vectors
+        # encoder: LSTM
+        params = get_layer('lstm')[0](options, params, prefix='encoder', 
+                                      nin=options['ctx_dim'], dim=options['dim'])
+        params = get_layer('lstm')[0](options, params, prefix='encoder_rev', 
+                                      nin=options['ctx_dim'], dim=options['dim'])
+        ctx_dim = options['dim'] * 2
+    # init_state, init_cell: [equations XX and XX]
+    for lidx in xrange(1, options['n_layers_init']):
+        params = get_layer('ff')[0](options, params, prefix='ff_init_%d'%lidx, nin=ctx_dim, nout=ctx_dim)
+    params = get_layer('ff')[0](options, params, prefix='ff_state', nin=ctx_dim, nout=options['dim'])
+    params = get_layer('ff')[0](options, params, prefix='ff_memory', nin=ctx_dim, nout=options['dim'])
+    # decoder: LSTM: [equation (1)/(2)/(3)]
+    params = get_layer('lstm_cond')[0](options, params, prefix='decoder', 
+                                       nin=options['dim_word'], dim=options['dim'], 
+                                       dimctx=ctx_dim)
+    # potentially deeper decoder (warning: somewhat untested)
+    if options['n_layers_lstm'] > 1:
+        for lidx in xrange(1, options['n_layers_lstm']):
+            params = get_layer('ff')[0](options, params, prefix='ff_state_%d'%lidx, nin=options['ctx_dim'], nout=options['dim'])
+            params = get_layer('ff')[0](options, params, prefix='ff_memory_%d'%lidx, nin=options['ctx_dim'], nout=options['dim'])
+            params = get_layer('lstm_cond')[0](options, params, prefix='decoder_%d'%lidx, 
+                                               nin=options['dim'], dim=options['dim'],
+                                               dimctx=ctx_dim)
+    # readout: [equation (7)]
+    params = get_layer('ff')[0](options, params, prefix='ff_logit_lstm', nin=options['dim'], nout=options['dim_word'])
+    if options['ctx2out']:
+        params = get_layer('ff')[0](options, params, prefix='ff_logit_ctx', nin=ctx_dim, nout=options['dim_word'])
+    if options['n_layers_out'] > 1:
+        for lidx in xrange(1, options['n_layers_out']):
+            params = get_layer('ff')[0](options, params, prefix='ff_logit_h%d'%lidx, nin=options['dim_word'], nout=options['dim_word'])
+    params = get_layer('ff')[0](options, params, prefix='ff_logit', nin=options['dim_word'], nout=options['n_words'])
+
+    return params
+
 
 # build a training model
 def build_model(tparams, options, sampling=True):
+    """ Builds the entire computational graph used for training
+
+    [This function builds a model described in Section 3.1.2 onwards
+    as the convolutional feature are precomputed, some extra features
+    which were not used are also implemented here.]
+
+    Parameters
+    ----------
+    tparams : OrderedDict
+        maps names of variables to theano shared variables
+    options : dict
+        big dictionary with all the settings and hyperparameters
+    sampling : boolean
+        If it is true, when using stochastic attention, follows
+        the learning rule described in section XX
+    Returns 
+    -------
+    trng: theano random number generator
+        Used for dropout, stochastic attention, etc
+    use_noise: theano shared variable
+        flag that toggles noise on and off
+    [x, mask, ctx]: theano variables
+        Represent the captions, binary mask, and annotations
+        for a single batch (see dimensions below)
+    alphas: theano variables
+        Attention weights
+    alpha_sample: theano variable
+        Sampled attention weights used in REINFORCE for stochastic
+        attention: see learning rule in section XXXX
+    cost: theano variable
+        negative log likelihood
+    opt_outs: OrderedDict
+        extra outputs required depending on configuration in options
+    """
     trng = RandomStreams(1234)
     use_noise = theano.shared(numpy.float32(0.))
 
-    # description string: #words x #samples
+    # description string: #words x #samples, 
     x = tensor.matrix('x', dtype='int64')
     mask = tensor.matrix('mask', dtype='float32')
     # context: #samples x #annotations x dim
@@ -624,6 +697,19 @@ def build_model(tparams, options, sampling=True):
 
 # build a sampler
 def build_sampler(tparams, options, use_noise, trng, sampling=True):
+    """ Builds a sampler used for generating from the model
+    Parameters
+    ----------
+        See build_model function above
+    Returns
+    -------
+    f_init : theano function
+        Input: annotation, Output: initial lstm state and memory 
+        (also performs transformation on ctx0 if using lstm_encoder)
+    f_next: theano function
+        Takes the previous word/state/memory + ctx0 and runs ne
+        step through the lstm (used for beam search) 
+    """
     # context: #annotations x dim
     ctx = tensor.matrix('ctx_sampler', dtype='float32')
     if options['lstm_encoder']:
@@ -652,7 +738,7 @@ def build_sampler(tparams, options, use_noise, trng, sampling=True):
     f_init = theano.function([ctx], [ctx]+init_state+init_memory, name='f_init', profile=False)
     print 'Done'
 
-    # x: 1 x 1
+    # build f_next
     ctx = tensor.matrix('ctx_sampler', dtype='float32')
     x = tensor.vector('x_sampler', dtype='int64')
     init_state = [tensor.matrix('init_state', dtype='float32')]
@@ -898,6 +984,10 @@ def validate_options(options):
     if options['use_dropout_lstm']:
         warnings.warn('dropout in the lstm seems not to help')
 
+    # Other checks:
+    if options['attn_type'] not in ['stochastic', 'deterministic']:
+        raise ValueError("specified attention type is not correct")
+
     return options
 
 
@@ -1025,7 +1115,7 @@ def train(dim_word=100, # word vector dimensionality
     else:
         baseline_time = theano.shared(numpy.float32(0.), name='baseline_time') 
         opt_outs['baseline_time'] = baseline_time
-
+        # [see Section 4.1: Stochastic "Hard" Attention for derivation of this learning rule]
         alpha_entropy_c = theano.shared(numpy.float32(alpha_entropy_c), name='alpha_entropy_c')
         alpha_entropy_reg = alpha_entropy_c * (alphas*tensor.log(alphas)).mean()
         if model_options['RL_sumCost']:
@@ -1038,7 +1128,7 @@ def train(dim_word=100, # word vector dimensionality
                             disconnected_inputs='raise', 
                             known_grads={alphas:opt_outs['masked_cost'][:,:,None]/10.*
                             (alphas_sample/alphas) + alpha_entropy_c*(tensor.log(alphas) + 1)})
-        # create update rules 
+        # create update rules, [see equation XX]
         hard_attn_updates += [(baseline_time, baseline_time * 0.9 + 0.1 * opt_outs['masked_cost'].mean())]
         hard_attn_updates += opt_outs['attn_updates']
 
@@ -1105,7 +1195,7 @@ def train(dim_word=100, # word vector dimensionality
             ud_start = time.time()
             cost = f_grad_shared(x, mask, ctx)
             f_update(lrate)
-            ud_duration = time.time() - ud_start
+            ud_duration = time.time() - ud_start # some monitoring for each mini-batch
 
             # Numerical stability check
             if numpy.isnan(cost) or numpy.isinf(cost):
