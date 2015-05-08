@@ -32,6 +32,7 @@ def gen_model(queue, rqueue, pid, model, options, k, normalize, word_idict, samp
     tparams = init_tparams(params)
 
     # build the sampling computational graph
+    # see capgen.py for more detailed explanations
     f_init, f_next = build_sampler(tparams, options, use_noise, trng, sampling=sampling)
 
     def _gencap(cc0):
@@ -69,6 +70,7 @@ def main(model, saveto, k=5, normalize=False, zero_pad=False, n_process=5, datas
     _, valid, test, worddict = load_data(load_train=False, load_dev=True if 'dev' in datasets else False,
                                              load_test=True if 'test' in datasets else False)
 
+    # <eos> means end of sequence (aka periods), UNK means unknown
     word_idict = dict()
     for kk, vv in worddict.iteritems():
         word_idict[vv] = kk
@@ -84,6 +86,7 @@ def main(model, saveto, k=5, normalize=False, zero_pad=False, n_process=5, datas
                                   args=(queue,rqueue,midx,model,options,k,normalize,word_idict, sampling))
         processes[midx].start()
 
+    # index -> words
     def _seqs2words(caps):
         capsw = []
         for cc in caps:
@@ -95,6 +98,7 @@ def main(model, saveto, k=5, normalize=False, zero_pad=False, n_process=5, datas
             capsw.append(' '.join(ww))
         return capsw
 
+    # unsparsify, reshape, and queue
     def _send_jobs(contexts):
         for idx, ctx in enumerate(contexts):
             cc = ctx.todense().reshape([14*14,512])
@@ -105,6 +109,7 @@ def main(model, saveto, k=5, normalize=False, zero_pad=False, n_process=5, datas
                 cc0 = cc
             queue.put((idx, cc0))
 
+    # retrieve caption from process
     def _retrieve_jobs(n_samples):
         caps = [None] * n_samples
         for idx in xrange(n_samples):
@@ -140,8 +145,8 @@ def main(model, saveto, k=5, normalize=False, zero_pad=False, n_process=5, datas
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-k', type=int, default=5)
-    parser.add_argument('-sampling', action="store_true", default=False) # this only matters for hard attentoin
-    parser.add_argument('-p', type=int, default=5)
+    parser.add_argument('-sampling', action="store_true", default=False) # this only matters for hard attention
+    parser.add_argument('-p', type=int, default=5, help="number of processes to use")
     parser.add_argument('-n', action="store_true", default=False)
     parser.add_argument('-z', action="store_true", default=False)
     parser.add_argument('-d', type=str, default='dev,test')

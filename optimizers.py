@@ -1,5 +1,6 @@
 import theano
-import theano.tensor
+import theano.tensor as tensor
+
 import numpy
 
 
@@ -106,6 +107,7 @@ def adam(lr, tparams, grads, inp, cost, hard_attn_up):
 
     return f_grad_shared, f_update
 
+# Vanilla SGD
 def sgd(lr, tparams, grads, inp, cost, hard_attn_up):
     gshared = [theano.shared(p.get_value() * numpy.float32(0.), name='%s_grad'%k) for k, p in tparams.iteritems()]
     gsup = [(gs, g) for gs, g in zip(gshared, grads)]

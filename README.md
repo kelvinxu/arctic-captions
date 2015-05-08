@@ -1,22 +1,7 @@
 # arctic-captions
 
 Source code for [Show, Attend and Tell: Neural Image Caption Generation with Visual Attention](http://arxiv.org/abs/1502.03044)
-runnable on cpu and gpu.
-
-## License
-
-Code is released under the [revised (3-clause) BSD
-License](http://directory.fsf.org/wiki/License:BSD_3Clause). If you use this
-code as part of any published research, please acknowledge the following paper. 
-(It does encourages researchers who publish their code!)
-
-**"Show, Attend and Tell: Neural Image Caption Generation with Visual Attention."**  
-Kelvin Xu, Jimmy Ba, Ryan Kiros, Kyunghyun Cho, Aaron Courville, Ruslan
-Salakhutdinov, Richard Zemel, Yoshua Bengio.   
-University of Toronto & Université de Montréal, 
-To appear in ICML (2015)
-
-[[bibtex coming soon]()]
+runnable on CPU and GPU. Joint collaboration between Université de Montréal & University of Toronto.
 
 ## Dependencies
 
@@ -32,9 +17,27 @@ In addition, this code is built using
 problems with specific to Theano, please use a commit from around February 2015
 and notify the authors.
 
-To use the evaluation script: see [coco-caption](https://github.com/tylin/coco-caption)
+To use the evaluation script: see [coco-caption](https://github.com/tylin/coco-caption) for the requirements.
 
-###Installation + Experiment Instructions
+## License
+
+Code is released under the [revised (3-clause) BSD License](http://directory.fsf.org/wiki/License:BSD_3Clause). If you use this
+code as part of any published research, please acknowledge the following paper
+(It does encourages researchers who publish their code!):
+
+**"Show, Attend and Tell: Neural Image Caption Generation with Visual Attention."**  
+Kelvin Xu, Jimmy Ba, Ryan Kiros, Kyunghyun Cho, Aaron Courville, Ruslan
+Salakhutdinov, Richard Zemel, Yoshua Bengio. To appear ICML (2015)
+
+    @article{Xu2015show,
+        title={Show, Attend and Tell: Neural Image Caption Generation with Visual Attention},
+        author={Xu, Kelvin and Ba, Jimmy and Kiros, Ryan and Courville, Aaron and Salakhutdinov, Ruslan and Zemel, Richard and Bengio, Yoshua},
+        journal={arXiv preprint arXiv:1502.03044},
+        year={2015}
+    }
+
+## Installation + Experiment Instructions
+
 1) Install the above dependencies and `$ git clone` the repo  
 2) Install Theano using your [favourite method](http://www.deeplearning.net/software/theano/)   
 3) TODO, rest of this
