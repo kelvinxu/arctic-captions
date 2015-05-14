@@ -377,7 +377,12 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
         return _x[:, n*dim:(n+1)*dim]
 
     def _step(m_, x_, h_, c_, a_, as_, ct_, pctx_, dp_=None, dp_att_=None):
-        # attention 
+        """ Each variable is one time slice of the RNN
+        m_ - (mask), x_- (previous word), h_- (hidden state), c_- (lstm memory),
+        a_ - (alpha distribution [eq (5)]), as_- (sample from alpha dist), ct_- (context), 
+        pctx_ (projected context), dp_/dp_att_ (dropout masks)
+        """
+        # attention computation
         # [described in  equations (4), (5), (6) in
         # section "3.1.2 Decoder: Long Short Term Memory Network]
         pstate_ = tensor.dot(h_, tparams[_p(prefix,'Wd_att')])
@@ -1092,7 +1097,7 @@ def train(dim_word=100,  # word vector dimensionality
           reload_=False,
           save_per_epoch=False): # this saves down the model every epoch
 
-    # Model options
+    # hyperparam dict
     model_options = locals().copy()
     model_options = validate_options(model_options)
 
