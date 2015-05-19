@@ -17,7 +17,7 @@ This code is written in python. To use it you will need:
 
 In addition, this code is built using the powerful
 [Theano](http://www.deeplearning.net/software/theano/) library. If you
-encounter problems with specific to Theano, please use a commit from around
+encounter problems specific to Theano, please use a commit from around
 February 2015 and notify the authors.
 
 To use the evaluation script (metrics.py): see
