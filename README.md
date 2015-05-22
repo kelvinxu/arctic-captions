@@ -10,7 +10,7 @@ Joint collaboration between the Université de Montréal & University of Toronto
 This code is written in python. To use it you will need:
 
 * Python 2.7
-* A relative recent version of [NumPy](http://www.numpy.org/)
+* A relatively recent version of [NumPy](http://www.numpy.org/)
 * [scikit learn](http://scikit-learn.org/stable/index.html)
 * [skimage](http://scikit-image.org/docs/dev/api/skimage.html)
 * [argparse](https://www.google.ca/search?q=argparse&oq=argparse&aqs=chrome..69i57.1260j0j1&sourceid=chrome&es_sm=122&ie=UTF-8#q=argparse+pip)
