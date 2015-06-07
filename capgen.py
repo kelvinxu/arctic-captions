@@ -71,8 +71,13 @@ def itemlist(tparams):
 
 # dropout in theano
 def dropout_layer(state_before, use_noise, trng):
-    # use_noise is set during training/testing
-    # dynamically changing the theano graph
+    """
+    tensor switch is like an if statement that checks the
+    value of the theano shared variable (use_noise), before
+    either dropping out the state_before tensor or
+    computing the appropriate activation. During training/testing
+    use_noise is toggled on and off.
+    """
     proj = tensor.switch(use_noise,
                          state_before *
                          trng.binomial(state_before.shape, p=0.5, n=1, dtype=state_before.dtype),
@@ -377,7 +382,7 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
         return _x[:, n*dim:(n+1)*dim]
 
     def _step(m_, x_, h_, c_, a_, as_, ct_, pctx_, dp_=None, dp_att_=None):
-        """ Each variable is one time slice of the RNN
+        """ Each variable is one time slice of the LSTM
         m_ - (mask), x_- (previous word), h_- (hidden state), c_- (lstm memory),
         a_ - (alpha distribution [eq (5)]), as_- (sample from alpha dist), ct_- (context), 
         pctx_ (projected context), dp_/dp_att_ (dropout masks)
@@ -397,7 +402,7 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
         if options['attn_type'] == 'deterministic':
             alpha = tensor.nnet.softmax(alpha.reshape([alpha_shp[0],alpha_shp[1]])) # softmax
             ctx_ = (context * alpha[:,:,None]).sum(1) # current context
-            alpha_sample = alpha # you can return something else reasonable here
+            alpha_sample = alpha # you can return something else reasonable here to debug
         else:
             alpha = tensor.nnet.softmax(temperature_c*alpha.reshape([alpha_shp[0],alpha_shp[1]])) # softmax
             # TODO return alpha_sample
@@ -421,7 +426,7 @@ def lstm_cond_layer(tparams, state_below, options, prefix='lstm',
         preact += x_
         preact += tensor.dot(ctx_, tparams[_p(prefix, 'Wc')])
 
-        # Recover the activation to the lstm gates
+        # Recover the activations to the lstm gates
         # [equation (1)]
         i = _slice(preact, 0, dim)
         f = _slice(preact, 1, dim)
@@ -534,7 +539,7 @@ def init_params(options):
     params = get_layer('lstm_cond')[0](options, params, prefix='decoder',
                                        nin=options['dim_word'], dim=options['dim'],
                                        dimctx=ctx_dim)
-    # potentially deeper decoder (warning: should work but somewhat untested)
+    # potentially deep decoder (warning: should work but somewhat untested)
     if options['n_layers_lstm'] > 1:
         for lidx in xrange(1, options['n_layers_lstm']):
             params = get_layer('ff')[0](options, params, prefix='ff_state_%d'%lidx, nin=options['ctx_dim'], nout=options['dim'])
@@ -705,7 +710,7 @@ def build_model(tparams, options, sampling=True):
         opt_outs['selector'] = sels
     if options['attn_type'] == 'stochastic':
         opt_outs['masked_cost'] = masked_cost # need this for reinforce later
-        opt_outs['attn_updates'] = attn_updates
+        opt_outs['attn_updates'] = attn_updates # this is to update the rng
 
     return trng, use_noise, [x, mask, ctx], alphas, alpha_sample, cost, opt_outs
 
@@ -762,7 +767,7 @@ def build_sampler(tparams, options, use_noise, trng, sampling=True):
             init_state.append(tensor.matrix('init_state', dtype='float32'))
             init_memory.append(tensor.matrix('init_memory', dtype='float32'))
 
-    # if it's the first word, emb should be all zero
+    # for the first word (which is coded with -1), emb should be all zero
     emb = tensor.switch(x[:,None] < 0, tensor.alloc(0., 1, tparams['Wemb'].shape[1]),
                         tparams['Wemb'][x])
 
@@ -1056,7 +1061,7 @@ def validate_options(options):
    train() then proceeds to do the following:
        1. The params are initialized (or reloaded)
        2. The computations graph is built symbolically using Theano.
-       3. A cost is defined, then gradient are obtained through automatically with tensor.grad :D
+       3. A cost is defined, then gradient are obtained automatically with tensor.grad :D
        4. With some helper functions, gradient descent + periodic saving/printing proceeds
 """
 def train(dim_word=100,  # word vector dimensionality
@@ -1106,6 +1111,9 @@ def train(dim_word=100,  # word vector dimensionality
         print "Reloading options"
         with open('%s.pkl'%saveto, 'rb') as f:
             model_options = pkl.load(f)
+
+    print "Using the following parameters:"
+    print  model_options
 
     print 'Loading data'
     load_data, prepare_data = get_dataset(dataset)
@@ -1164,7 +1172,7 @@ def train(dim_word=100,  # word vector dimensionality
         weight_decay *= decay_c
         cost += weight_decay
 
-    # Doubly stochastic regularization (see section )
+    # Doubly stochastic regularization
     if alpha_c > 0.:
         alpha_c = theano.shared(numpy.float32(alpha_c), name='alpha_c')
         alpha_reg = alpha_c * ((1.-alphas.sum(0))**2).sum(0).mean()
@@ -1185,7 +1193,7 @@ def train(dim_word=100,  # word vector dimensionality
             grads = tensor.grad(cost, wrt=itemlist(tparams),
                                 disconnected_inputs='raise',
                                 known_grads={alphas:(baseline_time-opt_outs['masked_cost'].mean(0))[None,:,None]/10.*
-                                            (alphas_sample/alphas) + alpha_entropy_c*(tensor.log(alphas) + 1)})
+                                            (-alphas_sample/alphas) + alpha_entropy_c*(tensor.log(alphas) + 1)})
         else:
             grads = tensor.grad(cost, wrt=itemlist(tparams),
                             disconnected_inputs='raise',
@@ -1215,7 +1223,7 @@ def train(dim_word=100,  # word vector dimensionality
     if test:
         kf_test = KFold(len(test[0]), n_folds=len(test[0])/valid_batch_size, shuffle=False)
 
-    # history_errs is a the bare-bones training log that holds the validation and test error
+    # history_errs is a bare-bones training log that holds the validation and test error
     history_errs = []
     # reload history
     if reload_ and os.path.exists(saveto):
@@ -1294,7 +1302,7 @@ def train(dim_word=100,  # word vector dimensionality
                 for jj in xrange(numpy.minimum(10, len(caps))):
                     sample, score = gen_sample(tparams, f_init, f_next, ctx_s[jj], model_options,
                                                trng=trng, k=5, maxlen=30, stochastic=False)
-                    # Decode the sample to human symbols
+                    # Decode the sample from encoding back to words
                     print 'Truth ',jj,': ',
                     for vv in x_s[:,jj]:
                         if vv == 0:
@@ -1356,7 +1364,7 @@ def train(dim_word=100,  # word vector dimensionality
         if save_per_epoch:
             numpy.savez(saveto + '_epoch_' + str(eidx + 1), history_errs=history_errs, **unzip(tparams))
 
-    # use the best nll parameters for final check point (if they exist)
+    # use the best nll parameters for final checkpoint (if they exist)
     if best_p is not None:
         zipp(best_p, tparams)
 
