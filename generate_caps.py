@@ -144,7 +144,7 @@ def main(model, saveto, k=5, normalize=False, zero_pad=False, n_process=5, datas
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-k', type=int, default=5)
+    parser.add_argument('-k', type=int, default=1)
     parser.add_argument('-sampling', action="store_true", default=False) # this only matters for hard attention
     parser.add_argument('-p', type=int, default=5, help="number of processes to use")
     parser.add_argument('-n', action="store_true", default=False)
