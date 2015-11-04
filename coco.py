@@ -8,7 +8,8 @@ import numpy
 
 
 def prepare_data(caps, features, worddict, maxlen=None, n_words=10000, zero_pad=False):
-    # x: a list of sentences
+    """ Formats the features/data
+    """
     seqs = []
     feat_list = []
     for cc in caps:
@@ -57,7 +58,7 @@ def load_data(load_train=True, load_dev=True, load_test=True, path='./'):
     ''' Loads the dataset
 
     :type dataset: string
-    :param dataset: the path to the dataset
+    :param dataset: the path to the dataset (here IMDB)
     '''
 
     #############
@@ -66,25 +67,27 @@ def load_data(load_train=True, load_dev=True, load_test=True, path='./'):
 
     print '... loading data'
 
+    train = None
+    valid = None
+    test = None
+
     if load_train:
         with open(path+'coco_align.train.pkl', 'rb') as f:
             train_cap = pkl.load(f)
             train_feat = pkl.load(f)
         train = (train_cap, train_feat)
-    else:
-        train = None
-    if load_test:
-        with open(path+'coco_align.test.pkl', 'rb') as f:
-            test_cap = pkl.load(f)
-            test_feat = pkl.load(f)
-        test = (test_cap, test_feat)
-    else:
-        test = None
+
     if load_dev:
         with open(path+'coco_align.dev.pkl', 'rb') as f:
             dev_cap = pkl.load(f)
             dev_feat = pkl.load(f)
         valid = (dev_cap, dev_feat)
+
+    if load_test:
+        with open(path+'coco_align.test.pkl', 'rb') as f:
+            test_cap = pkl.load(f)
+            test_feat = pkl.load(f)
+        test = (test_cap, test_feat)
 
     with open(path+'dictionary.pkl', 'rb') as f:
         worddict = pkl.load(f)
